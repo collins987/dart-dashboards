@@ -105,8 +105,9 @@ function monthly(companyId: string, categoryId: string, year: number): Cents[] {
     values = series.monthly.map((v) => Math.round(v * CENTS_PER_MILLION));
   } else {
     // The next year's figure divided by (1 + growth) gives this year's figure.
+    const yearStep = SEED.yearFactor[year] / SEED.yearFactor[year + 1];
     values = monthly(companyId, categoryId, year + 1).map((v) =>
-      Math.round(v / (1 + series.yoyPct / 100))
+      Math.round((v / (1 + series.yoyPct / 100)) * yearStep)
     );
   }
   monthlyCache.set(cacheKey, values);

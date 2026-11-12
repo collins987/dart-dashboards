@@ -14,6 +14,12 @@
 export const SEED = {
   currency: "KES",
 
+  /**
+   * Year-by-year trading factor applied on top of each series' yoyPct, so years
+   * move differently rather than in a steady line. 1.0 = base-year level.
+   */
+  yearFactor: { 2021: 0.86, 2022: 0.97, 2023: 1.04, 2024: 0.95, 2025: 1.08, 2026: 1.0 } as Record<number, number>,
+
   /** Years with data, ascending. */
   firstYear: 2021,
   lastYear: 2026,
