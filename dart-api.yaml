@@ -1,0 +1,916 @@
+openapi: 3.0.3
+info:
+  title: Financial Reporting API
+  version: 1.1.0
+  description: |
+    Revenue and expense reporting for EXCO, Executive Directors and the GMD.
+
+    This file describes the API as implemented. It supersedes
+    `dart-sample-api.yaml` (1.0.0); the changes are listed at the end.
+
+    Conventions:
+    - All amounts are numbers rounded to 2 decimals (half up, once, after all
+      arithmetic), in the currency given by the `currency` field of each
+      response (group reporting currency).
+    - Revenue and expense are both reported as positive amounts in normal
+      operation. Net = revenue - expense. A category can be negative (for
+      example a net FX loss inside an income category).
+    - `year` is required on every financials endpoint. `quarter` and `month`
+      are optional and mutually exclusive. Sending both returns 400.
+    - Only complete months are reported. A month is complete once data exists
+      for a later month in every selected company; `/periods` returns the
+      latest complete month. A period that has started but is not finished is
+      cut to its complete months and compared with the same months of the prior
+      year (for example Jan-May 2026 vs Jan-May 2025); `periodLabel` and
+      `comparison.label` say which months were used. A period with no complete
+      month returns 404 DATA_NOT_AVAILABLE.
+    - Omitting `companyIds` means "all companies this user is allowed to see".
+      Requesting a company the user cannot see, or one that does not exist,
+      returns 403.
+    - Every financials response echoes `appliedFilters` and includes `dataAsOf`
+      (time of the last successful pipeline load; with several companies, the
+      oldest of their loads).
+    - Year-end closing entries are excluded. Reversed and prior-year entries
+      are included.
+    - Errors always use the Error schema below, and every response carries an
+      `X-Request-ID` header matching `error.requestId`.
+    - Lists that can grow use page-based pagination (`page`, `pageSize`) and
+      return a `pagination` block.
+
+    Changes from 1.0.0:
+    - `year` no longer has a fixed 2023-2026 range; years with data come from
+      `/periods`, and a year without data returns 404 DATA_NOT_AVAILABLE.
+    - Invalid filters return 400 (including wrong types and out-of-range values).
+    - 404 DATA_NOT_AVAILABLE added to all financials endpoints; 500 added everywhere.
+    - Summary `data` gains `periodLabel`; `netMarginPct` is nullable.
+    - `appliedFilters` is a typed object per endpoint instead of a free-form map.
+    - Trend: `priorYear` is present only when `includePriorYear=true`.
+    - Breakdown: `priorYearAmount` is always a number (0 when there was no
+      activity); `sharePct` is nullable.
+    - Category drill-down echoes `sort`; `OTHERS` is not a category (404).
+    - Response fields are now marked required where the API always sends them.
+
+servers:
+  - url: https://reporting-api.example.com/api/v1
+    description: Production
+  - url: https://reporting-api.staging.example.com/api/v1
+    description: Staging
+  - url: http://localhost:8000/api/v1
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Reference
+    description: Values used to populate filter dropdowns
+  - name: Financials
+    description: Report data
+
+paths:
+  /companies:
+    get:
+      tags: [Reference]
+      summary: List companies the current user can view
+      operationId: listCompanies
+      responses:
+        "200":
+          description: Companies for the Company filter dropdown, sorted by name. Empty if the user has none.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompaniesResponse"
+              example:
+                data:
+                  - id: "LITES"
+                    name: "LASER Infrastructure and Technology Solutions"
+                    shortName: "LITES"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /periods:
+    get:
+      tags: [Reference]
+      summary: Years with data, and the latest complete month
+      description: >
+        Populates the Year filter and lets the UI default to the latest
+        complete month. Scoped to the companies the user can see.
+      operationId: getPeriods
+      responses:
+        "200":
+          description: Available periods
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodsResponse"
+              example:
+                years: [2024, 2025, 2026]
+                latestClosedPeriod:
+                  year: 2026
+                  month: 5
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /financials/summary:
+    get:
+      tags: [Financials]
+      summary: Headline totals (KPI cards)
+      description: >
+        Total revenue, total expense and net for the selected period (cut to
+        complete months), with the same months of the prior year for comparison.
+      operationId: getSummary
+      parameters:
+        - $ref: "#/components/parameters/CompanyIds"
+        - $ref: "#/components/parameters/Year"
+        - $ref: "#/components/parameters/Quarter"
+        - $ref: "#/components/parameters/Month"
+      responses:
+        "200":
+          description: Summary totals
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryResponse"
+              example:
+                currency: "KES"
+                dataAsOf: "2026-11-09T07:16:25.478117Z"
+                appliedFilters:
+                  companyIds: ["LITES"]
+                  year: 2026
+                  quarter: null
+                  month: null
+                data:
+                  revenue: 74000000.00
+                  expense: 70000000.00
+                  net: 4000000.00
+                  periodLabel: "Jan–May 2026"
+                  netMarginPct: 5.41
+                  comparison:
+                    label: "Jan–May 2025"
+                    revenue: 72000000.00
+                    expense: 75000000.00
+                    net: -3000000.00
+                    revenueChangePct: 2.78
+                    expenseChangePct: -6.67
+                    netChangePct: 233.33
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/DataNotAvailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /financials/trend:
+    get:
+      tags: [Financials]
+      summary: Revenue and expense trend over the year
+      description: >
+        Always returns the full year: 12 points for `month`, 4 for `quarter`.
+        Quarter and month filters are not accepted here; the UI highlights the
+        selected period on the chart instead. Points that are not complete
+        (a quarter is complete only when all three months are) have
+        `isClosed: false` and null amounts. With `includePriorYear=true`, every
+        point has `priorYear`, whose amounts are null if those prior-year months
+        are not complete; without it, `priorYear` is omitted.
+      operationId: getTrend
+      parameters:
+        - $ref: "#/components/parameters/CompanyIds"
+        - $ref: "#/components/parameters/Year"
+        - name: granularity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [month, quarter]
+            default: month
+        - name: includePriorYear
+          in: query
+          required: false
+          description: Adds prior-year values to each point for a comparison line
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Trend series
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrendResponse"
+              example:
+                currency: "KES"
+                dataAsOf: "2026-11-09T07:16:25.478117Z"
+                appliedFilters:
+                  companyIds: ["LITES"]
+                  year: 2026
+                  granularity: "quarter"
+                  includePriorYear: true
+                data:
+                  - period: "2026-Q1"
+                    label: "Q1"
+                    isClosed: true
+                    revenue: 60000000.00
+                    expense: 54000000.00
+                    net: 6000000.00
+                    priorYear: { revenue: 54000000.00, expense: 71000000.00, net: -17000000.00 }
+                  - period: "2026-Q2"
+                    label: "Q2"
+                    isClosed: false
+                    revenue: null
+                    expense: null
+                    net: null
+                    priorYear: { revenue: 79000000.00, expense: 66000000.00, net: 13000000.00 }
+                  - period: "2026-Q3"
+                    label: "Q3"
+                    isClosed: false
+                    revenue: null
+                    expense: null
+                    net: null
+                    priorYear: { revenue: 48000000.00, expense: 34000000.00, net: 14000000.00 }
+                  - period: "2026-Q4"
+                    label: "Q4"
+                    isClosed: false
+                    revenue: null
+                    expense: null
+                    net: null
+                    priorYear: { revenue: 39000000.00, expense: 24000000.00, net: 15000000.00 }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/DataNotAvailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /financials/breakdown:
+    get:
+      tags: [Financials]
+      summary: Breakdown by revenue or expense category
+      description: >
+        Amounts per category for the selected period (cut to complete months),
+        sorted by amount descending. Categories beyond `top` are rolled into a
+        single row with `categoryId: OTHERS`, always last, so pie and bar
+        charts stay readable. `total` is the sum of all categories. The Others row's
+        `priorYearAmount` includes prior-year categories with no activity in
+        the current period.
+      operationId: getBreakdown
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [revenue, expense]
+        - $ref: "#/components/parameters/CompanyIds"
+        - $ref: "#/components/parameters/Year"
+        - $ref: "#/components/parameters/Quarter"
+        - $ref: "#/components/parameters/Month"
+        - name: top
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 8
+      responses:
+        "200":
+          description: Category breakdown
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreakdownResponse"
+              example:
+                currency: "KES"
+                dataAsOf: "2026-11-09T07:16:25.478117Z"
+                appliedFilters:
+                  companyIds: ["LITES"]
+                  year: 2025
+                  quarter: null
+                  month: null
+                  type: "expense"
+                  top: 2
+                total: 195000000.00
+                data:
+                  - categoryId: "EXP-COGS"
+                    categoryName: "Cost of Sales"
+                    amount: 85000000.00
+                    sharePct: 43.59
+                    priorYearAmount: 81000000.00
+                    changePct: 4.94
+                  - categoryId: "EXP-STAFF"
+                    categoryName: "Staff Costs"
+                    amount: 70000000.00
+                    sharePct: 35.90
+                    priorYearAmount: 73000000.00
+                    changePct: -4.11
+                  - categoryId: "OTHERS"
+                    categoryName: "Others"
+                    amount: 40000000.00
+                    sharePct: 20.51
+                    priorYearAmount: 55000000.00
+                    changePct: -27.27
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/DataNotAvailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /financials/categories/{categoryId}/accounts:
+    get:
+      tags: [Financials]
+      summary: Drill-down from a category to its GL accounts (paginated)
+      description: >
+        Used when a user clicks a category in the breakdown chart. One row per
+        company and GL account. `OTHERS` is a roll-up, not a category, and
+        returns 404. Ties in the sort order are broken by company and account
+        code, so pages are stable.
+      operationId: getCategoryAccounts
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 64
+        - $ref: "#/components/parameters/CompanyIds"
+        - $ref: "#/components/parameters/Year"
+        - $ref: "#/components/parameters/Quarter"
+        - $ref: "#/components/parameters/Month"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: sort
+          in: query
+          required: false
+          description: Field to sort by; prefix with "-" for descending
+          schema:
+            type: string
+            enum: [amount, -amount, accountName, -accountName]
+            default: -amount
+      responses:
+        "200":
+          description: >
+            Accounts within the category. A page past the end returns an empty
+            `data` array with the real totals in `pagination`.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountListResponse"
+              example:
+                currency: "KES"
+                dataAsOf: "2026-11-09T07:16:25.478117Z"
+                appliedFilters:
+                  companyIds: ["LITES"]
+                  year: 2025
+                  quarter: null
+                  month: null
+                  categoryId: "EXP-STAFF"
+                  sort: "-amount"
+                data:
+                  - accountCode: "LTS-6002-001"
+                    accountName: "Staff Salaries"
+                    companyId: "LITES"
+                    amount: 47000000.00
+                  - accountCode: "LTS-6002-003"
+                    accountName: "Staff Pension ER Contribution"
+                    companyId: "LITES"
+                    amount: 6300000.00
+                pagination:
+                  page: 1
+                  pageSize: 2
+                  totalItems: 13
+                  totalPages: 7
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/CategoryOrDataNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token carries the user's role (EXCO, ED, GMD) and the list of
+        companies they may view. GMD and EXCO see all companies; an ED sees
+        only the companies assigned to them. Claim names are configurable
+        pending the DAIS SSO design. In local development the API can run
+        without tokens.
+
+  headers:
+    RequestId:
+      description: Request identifier; the same value as `error.requestId` on errors.
+      schema:
+        type: string
+        example: "req_8f2a1c0b9d3e"
+
+  parameters:
+    CompanyIds:
+      name: companyIds
+      in: query
+      required: false
+      description: >
+        Comma-separated company IDs, for example `LITES,LPS`. Omit for all
+        permitted companies. Duplicates are ignored; an empty value returns 400.
+      style: form
+      explode: false
+      schema:
+        type: array
+        minItems: 1
+        items:
+          type: string
+      example: ["LITES"]
+    Year:
+      name: year
+      in: query
+      required: true
+      description: >
+        Calendar year. The range below is a sanity check only; the years that
+        have data come from `/periods`, and a year without data returns 404.
+      schema:
+        type: integer
+        minimum: 2000
+        maximum: 2100
+      example: 2026
+    Quarter:
+      name: quarter
+      in: query
+      required: false
+      description: 1 to 4. Cannot be combined with month.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 4
+    Month:
+      name: month
+      in: query
+      required: false
+      description: 1 to 12. Cannot be combined with quarter.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 12
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+
+  schemas:
+    Company:
+      type: object
+      additionalProperties: false
+      required: [id, name, shortName]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        shortName: { type: string, nullable: true }
+
+    CompaniesResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Company"
+
+    PeriodsResponse:
+      type: object
+      additionalProperties: false
+      required: [years, latestClosedPeriod]
+      properties:
+        years:
+          type: array
+          description: Years with income-statement activity, ascending.
+          items:
+            type: integer
+        latestClosedPeriod:
+          type: object
+          nullable: true
+          description: Latest complete month. Null when there is no complete month yet.
+          additionalProperties: false
+          required: [year, month]
+          properties:
+            year: { type: integer }
+            month: { type: integer, minimum: 1, maximum: 12 }
+
+    PeriodFilters:
+      type: object
+      description: Echo of the filters the server applied.
+      additionalProperties: false
+      required: [companyIds, year, quarter, month]
+      properties:
+        companyIds:
+          type: array
+          description: The companies actually used (all permitted companies when the request omitted them).
+          items: { type: string }
+        year: { type: integer }
+        quarter: { type: integer, nullable: true }
+        month: { type: integer, nullable: true }
+
+    TrendFilters:
+      type: object
+      additionalProperties: false
+      required: [companyIds, year, granularity, includePriorYear]
+      properties:
+        companyIds:
+          type: array
+          items: { type: string }
+        year: { type: integer }
+        granularity: { type: string, enum: [month, quarter] }
+        includePriorYear: { type: boolean }
+
+    BreakdownFilters:
+      type: object
+      additionalProperties: false
+      required: [companyIds, year, quarter, month, type, top]
+      properties:
+        companyIds:
+          type: array
+          items: { type: string }
+        year: { type: integer }
+        quarter: { type: integer, nullable: true }
+        month: { type: integer, nullable: true }
+        type: { type: string, enum: [revenue, expense] }
+        top: { type: integer }
+
+    AccountFilters:
+      type: object
+      additionalProperties: false
+      required: [companyIds, year, quarter, month, categoryId, sort]
+      properties:
+        companyIds:
+          type: array
+          items: { type: string }
+        year: { type: integer }
+        quarter: { type: integer, nullable: true }
+        month: { type: integer, nullable: true }
+        categoryId: { type: string }
+        sort: { type: string, enum: [amount, -amount, accountName, -accountName] }
+
+    Currency:
+      type: string
+      description: ISO 4217 code
+      example: KES
+
+    DataAsOf:
+      type: string
+      format: date-time
+      description: Time of the last successful pipeline load (the oldest across the selected companies).
+
+    Totals:
+      type: object
+      additionalProperties: false
+      required: [revenue, expense, net]
+      properties:
+        revenue: { type: number, nullable: true }
+        expense: { type: number, nullable: true }
+        net: { type: number, nullable: true }
+
+    Comparison:
+      type: object
+      additionalProperties: false
+      required: [label, revenue, expense, net, revenueChangePct, expenseChangePct, netChangePct]
+      properties:
+        label:
+          type: string
+          description: The prior-year months used, for example "Q2 2025" or "Jan–May 2025".
+        revenue: { type: number }
+        expense: { type: number }
+        net: { type: number }
+        revenueChangePct:
+          type: number
+          nullable: true
+          description: (current - prior) / |prior| x 100. Null when the prior value is zero.
+        expenseChangePct: { type: number, nullable: true }
+        netChangePct: { type: number, nullable: true }
+
+    SummaryData:
+      type: object
+      additionalProperties: false
+      required: [revenue, expense, net, periodLabel, netMarginPct, comparison]
+      properties:
+        revenue: { type: number }
+        expense: { type: number }
+        net: { type: number }
+        periodLabel:
+          type: string
+          description: >
+            The months actually reported, for example "2025", "Q2 2026",
+            "Sep 2026", or "Jan–May 2026" when the year is still in progress.
+        netMarginPct:
+          type: number
+          nullable: true
+          description: net / revenue x 100. Null when revenue is zero.
+        comparison:
+          $ref: "#/components/schemas/Comparison"
+
+    SummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [currency, dataAsOf, appliedFilters, data]
+      properties:
+        currency: { $ref: "#/components/schemas/Currency" }
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
+        appliedFilters: { $ref: "#/components/schemas/PeriodFilters" }
+        data: { $ref: "#/components/schemas/SummaryData" }
+
+    TrendPoint:
+      type: object
+      additionalProperties: false
+      required: [period, label, isClosed, revenue, expense, net]
+      properties:
+        period:
+          type: string
+          description: "YYYY-MM for month, YYYY-Qn for quarter"
+        label:
+          type: string
+          description: "Jan ... Dec, or Q1 ... Q4"
+        isClosed:
+          type: boolean
+          description: True when every month in the point is complete. When false, the amounts are null.
+        revenue: { type: number, nullable: true }
+        expense: { type: number, nullable: true }
+        net: { type: number, nullable: true }
+        priorYear:
+          $ref: "#/components/schemas/Totals"
+
+    TrendResponse:
+      type: object
+      additionalProperties: false
+      required: [currency, dataAsOf, appliedFilters, data]
+      properties:
+        currency: { $ref: "#/components/schemas/Currency" }
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
+        appliedFilters: { $ref: "#/components/schemas/TrendFilters" }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrendPoint"
+
+    BreakdownItem:
+      type: object
+      additionalProperties: false
+      required: [categoryId, categoryName, amount, sharePct, priorYearAmount, changePct]
+      properties:
+        categoryId:
+          type: string
+          description: Report category ID, or OTHERS for the roll-up row.
+        categoryName: { type: string }
+        amount:
+          type: number
+          description: Can be negative, for example a category holding a net FX loss.
+        sharePct:
+          type: number
+          nullable: true
+          description: amount / total x 100. Null when the total is zero.
+        priorYearAmount:
+          type: number
+          description: Same months of the prior year; 0 when there was no activity.
+        changePct:
+          type: number
+          nullable: true
+          description: Null when the prior-year amount is zero.
+
+    BreakdownResponse:
+      type: object
+      additionalProperties: false
+      required: [currency, dataAsOf, appliedFilters, total, data]
+      properties:
+        currency: { $ref: "#/components/schemas/Currency" }
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
+        appliedFilters: { $ref: "#/components/schemas/BreakdownFilters" }
+        total: { type: number }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BreakdownItem"
+
+    AccountItem:
+      type: object
+      additionalProperties: false
+      required: [accountCode, accountName, companyId, amount]
+      properties:
+        accountCode: { type: string }
+        accountName: { type: string }
+        companyId: { type: string }
+        amount: { type: number }
+
+    Pagination:
+      type: object
+      additionalProperties: false
+      required: [page, pageSize, totalItems, totalPages]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalItems: { type: integer }
+        totalPages: { type: integer }
+
+    AccountListResponse:
+      type: object
+      additionalProperties: false
+      required: [currency, dataAsOf, appliedFilters, data, pagination]
+      properties:
+        currency: { $ref: "#/components/schemas/Currency" }
+        dataAsOf: { $ref: "#/components/schemas/DataAsOf" }
+        appliedFilters: { $ref: "#/components/schemas/AccountFilters" }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable code the UI can switch on
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHENTICATED
+                - FORBIDDEN_COMPANY
+                - NOT_FOUND
+                - DATA_NOT_AVAILABLE
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Human-readable, safe to show to the user
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [field, issue]
+                properties:
+                  field: { type: string }
+                  issue: { type: string }
+            requestId:
+              type: string
+              description: Quote this when reporting an issue; matches server logs
+
+  responses:
+    BadRequest:
+      description: Invalid filters (both quarter and month, wrong types, out-of-range values, empty companyIds)
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Quarter and month cannot be used together."
+              details:
+                - field: "month"
+                  issue: "Not allowed when quarter is set"
+              requestId: "req_8f2a1c0b9d3e"
+    Unauthorized:
+      description: Missing, invalid or expired token, or a token without a reporting role
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: "UNAUTHENTICATED"
+              message: "Your session has expired. Please sign in again."
+              requestId: "req_19bd02a4c771"
+    Forbidden:
+      description: User requested a company they cannot view, or can view no companies at all
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: "FORBIDDEN_COMPANY"
+              message: "You do not have access to one or more selected companies."
+              details:
+                - field: "companyIds"
+                  issue: "No access to LPS"
+              requestId: "req_77c4e9d0e512"
+    DataNotAvailable:
+      description: >
+        No data for the request: the year has no data for the selected
+        companies, the period has no complete month yet, or a selected company
+        has not been loaded.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            notComplete:
+              value:
+                error:
+                  code: "DATA_NOT_AVAILABLE"
+                  message: "Jun 2026 is not complete yet."
+                  requestId: "req_0c5b7d2e9f01"
+            noYear:
+              value:
+                error:
+                  code: "DATA_NOT_AVAILABLE"
+                  message: "There is no data for 2031 for the selected companies."
+                  requestId: "req_4a1e88b2c0d7"
+    CategoryOrDataNotFound:
+      description: Unknown category (code NOT_FOUND), or no data for the request (code DATA_NOT_AVAILABLE)
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "Category EXP-XYZ was not found."
+              requestId: "req_a01f3d6b2e90"
+    InternalError:
+      description: Unexpected server error
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: "INTERNAL_ERROR"
+              message: "Something went wrong. Please try again or quote the request ID."
+              requestId: "req_5d9c3a7e1b42"

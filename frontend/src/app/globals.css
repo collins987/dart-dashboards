@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* Design tokens transcribed from the DART Figma file.
+   `static` emits every variable even when no utility class references it,
+   because chart series read them through var() rather than Tailwind classes. */
+@theme static {
+  --color-brand-primary: #06abd3;
+  --color-brand-secondary: #d51167;
+  --color-brand-accent: #e1c51a;
+  --color-brand-blue: #0a6fd1;
+
+  --color-ink: #0f2748;
+  --color-body: #334155;
+  --color-muted: #64748b;
+  --color-line: #e9edf3;
+  --color-grid: #f1f4f8;
+
+  --color-tint-teal: #e4f5fb;
+  --color-tint-pink: #fce6ef;
+  --color-tint-blue: #e3f0fc;
+  --color-tint-yellow: #fdf6d6;
+
+  --color-positive: #15803d;
+  --color-positive-bg: #e7f6ec;
+  --color-negative: #c0362c;
+  --color-negative-bg: #fbe9e7;
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-grid);
+  color: var(--color-body);
+}

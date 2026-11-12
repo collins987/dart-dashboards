@@ -1,0 +1,108 @@
+# Data Analytics Reporting Tool: Project Structure
+
+A monorepo layout that keeps the ETL pipeline, API, and frontend separate but in one place. It assumes Python (FastAPI) for the ETL and backend, and React with TypeScript for the frontend.
+
+## Folder Structure
+
+```
+cpfgroup-dart/
+├── README.md
+├── .env.example                # template for secrets
+├── .gitignore
+│
+├── etl/                        # Extract, Transform, Load pipeline
+│   ├── config/
+│   │   └── settings.py         # connection strings, schedules, env vars
+│   ├── connectors/
+│   │   ├── bc_connector.py     # Business Central connection
+│   │   └── warehouse.py        # target/reporting database connection
+│   ├── extract/
+│   │   ├── companies.py
+│   │   ├── gl_entries.py
+│   │   └── chart_of_accounts.py
+│   ├── transform/
+│   │   ├── cleaning.py         # nulls, types, dates, duplicates
+│   │   ├── mapping.py          # GL alignment across companies
+│   │   └── aggregations.py
+│   ├── load/
+│   │   └── loader.py           # writes to reporting tables
+│   ├── pipelines/
+│   │   └── biweekly_refresh.py    # orchestrates extract → transform → load
+│   ├── sql/                    # raw SQL scripts and views
+│   ├── tests/
+│   ├── requirements.txt
+│   └── main.py                 # entry point / scheduler trigger
+│
+├── backend/                    # API that serves the processed data
+│   ├── app/
+│   │   ├── main.py             # app startup, middleware, CORS
+│   │   ├── core/
+│   │   │   ├── config.py
+│   │   │   └── security.py     # auth (SSO)
+│   │   ├── db/
+│   │   │   ├── session.py      # DB connection/session
+│   │   │   └── base.py
+│   │   ├── models/             # ORM models (tables)
+│   │   ├── schemas/            # request/response shapes (Pydantic)
+│   │   ├── repositories/       # database queries
+│   │   ├── services/           # business logic
+│   │   └── api/
+│   │       └── v1/
+│   │           ├── routes/
+│   │           │   ├── reports.py      #agreed apis from the YAML
+│   │           │   ├── companies.py
+│   │           │   └── accounts.py
+│   │           └── router.py
+│   ├── tests/
+│   └── requirements.txt
+│
+├── frontend/                       # Next.js app that consumes the API
+│   ├── public/                     # static assets (logos, icons)
+│   ├── src/
+│   │   ├── app/                    # routes: each folder = a URL
+│   │   │   ├── layout.tsx          # root layout (html, body, providers)
+│   │   │   ├── page.tsx            # home → redirect to /dashboard
+│   │   │   ├── globals.css
+│   │   │   └── (dashboard)/        # shared layout for logged-in pages
+│   │   │       ├── layout.tsx      # sidebar, header
+│   │   │       ├── dashboard/
+│   │   │       │   ├── page.tsx    # /dashboard
+│   │   │       │   ├── loading.tsx # skeleton while data loads
+│   │   │       │   └── error.tsx   # error boundary
+│   │   │       ├── reports/
+│   │   │       │   ├── page.tsx    # /reports
+│   │   │       │   └── [id]/
+│   │   │       │       └── page.tsx # /reports/123
+│   │   │       └── settings/
+│   │   │           └── page.tsx    # /settings
+│   │   ├── components/
+│   │   │   ├── ui/                 # buttons, inputs, cards
+│   │   │   ├── charts/             # chart wrappers
+│   │   │   ├── tables/             # data tables
+│   │   │   └── layout/             # sidebar, header, nav
+│   │   ├── lib/
+│   │   │   ├── api/                # API client functions (fetch to FastAPI)
+│   │   │   └── utils.ts            # formatters, helpers
+│   │   ├── hooks/                  # client-side hooks (useReports, useAuth)
+│   │   ├── providers/              # context providers (auth, query client, theme)
+│   │   ├── types/                  # shared TypeScript types for API data
+│   │   └── proxy.ts               # Next.js 16 request proxy (auth handled by existing SSO)
+│   ├── .env.local                  # NEXT_PUBLIC_API_URL etc.
+│   ├── next.config.ts
+│   ├── package.json
+│   └── tsconfig.json
+│
+└── docs/
+    ├── data-dictionary.md      # tables, fields, CoA mappings
+    └── api.md
+```
+
+## Design Principles
+
+**Separate ETL from the API.** The two run on different schedules: the ETL runs in batches (nightly, hourly), while the API is always on. The API should only read from the cleaned reporting tables, never from the source system directly. This protects the source database from heavy queries and keeps API responses fast.
+
+**Layer the backend.** Routes handle HTTP, services hold business rules, and repositories hold the SQL. When a query changes, you only touch one place.
+
+**Centralise frontend API calls.** Keeping all API calls in `src/api/` and their response types in `src/types/` means that if an endpoint changes, you fix it once and TypeScript flags every component affected.
+
+**Maintain a data dictionary.** Aligning general ledgers across several companies requires a single documented mapping of each company's accounts to the shared reporting structure. Keep it in `docs/data-dictionary.md`.
