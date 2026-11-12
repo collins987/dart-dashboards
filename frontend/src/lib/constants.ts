@@ -1,6 +1,6 @@
 export const API_BASE_URL = "/api";
 
-// Serve transcribed sample data (lib/api/mock.ts) instead of calling the
+// Answer requests from the stored sample responses (src/data.ts) instead of calling the
 // backend. Set to false — or NEXT_PUBLIC_USE_MOCK=false — once the real API is
 // connected.
 export const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK !== "false";

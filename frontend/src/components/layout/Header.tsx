@@ -6,7 +6,7 @@ import Link from "next/link";
 import { LogOut, Search } from "lucide-react";
 import { CURRENT_USER } from "@/lib/constants";
 import { SIGNED_OUT_PATH } from "@/lib/session";
-import { SEARCHABLE_DASHBOARDS } from "@/search";
+import { searchItems } from "@/search";
 import { useFilters } from "@/hooks/useFilters";
 import { useCompanies } from "@/hooks/useCompanies";
 
@@ -47,16 +47,12 @@ export function Header() {
   const needle = query.trim().toLowerCase();
   const results: SearchResult[] = needle
     ? [
-        ...SEARCHABLE_DASHBOARDS.filter(
-          (d) =>
-            d.name.toLowerCase().includes(needle) ||
-            d.description.toLowerCase().includes(needle)
-        ).map<SearchResult>((d) => ({
+        ...searchItems(query).map<SearchResult>((item) => ({
           kind: "dashboard",
-          key: `dash-${d.url}`,
-          title: d.name,
-          detail: d.description,
-          href: d.url,
+          key: item.id,
+          title: item.title,
+          detail: `${item.group} · ${item.description}`,
+          href: item.url,
         })),
         ...(companiesResponse?.data ?? [])
           .filter(

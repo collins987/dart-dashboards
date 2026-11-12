@@ -15,7 +15,7 @@ import type { FilterState } from "@/types/api";
 import { GROUP_COMPANY_ID } from "@/lib/constants";
 import { filtersFromParams, filtersToParams } from "@/lib/filters";
 import { usePeriods } from "@/hooks/usePeriods";
-import { MONTH_LABELS_FULL } from "@/data";
+import { yearToDateLabel } from "@/lib/months";
 
 interface FilterContextValue {
   filters: FilterState;
@@ -101,7 +101,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
   const latestPeriodLabel =
     latest !== null
-      ? `Jan – ${MONTH_LABELS_FULL[latest.month - 1]} ${latest.year}`
+      ? yearToDateLabel(latest.year, latest.month)
       : null;
 
   const value = useMemo(

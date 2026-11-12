@@ -1,6 +1,6 @@
 import type { FilterState } from "@/types/api";
 import { GROUP_COMPANY_ID } from "@/lib/constants";
-import { MONTH_LABELS_SHORT } from "@/data";
+import { MONTH_LABELS_SHORT } from "@/lib/months";
 
 /** Axis labels (Jan…Dec) covered by the selected quarter or month; empty when neither is chosen. */
 export function selectedMonthLabels(quarter: number | null, month: number | null): string[] {

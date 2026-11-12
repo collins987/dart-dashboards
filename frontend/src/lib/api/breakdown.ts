@@ -1,7 +1,5 @@
 import { apiClient } from "./client";
 import type { BreakdownResponse } from "@/types/api";
-import { USE_MOCK_DATA } from "@/lib/constants";
-import { mockBreakdown } from "./mock";
 
 interface BreakdownParams {
   type: "revenue" | "expense";
@@ -13,15 +11,6 @@ interface BreakdownParams {
 }
 
 export async function getBreakdown(params: BreakdownParams): Promise<BreakdownResponse> {
-  if (USE_MOCK_DATA) {
-    return mockBreakdown(
-      params.type,
-      params.companyIds,
-      params.year,
-      params.quarter ?? null,
-      params.month ?? null
-    );
-  }
   const { data } = await apiClient.get<BreakdownResponse>("/financials/breakdown", {
     params: {
       type: params.type,
