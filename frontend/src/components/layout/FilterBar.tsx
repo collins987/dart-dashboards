@@ -71,8 +71,7 @@ function FilterSelect({
 }
 
 export function FilterBar() {
-  const { pending, setCompany, setYear, setQuarter, setMonth, applyFilters } =
-    useFilters();
+  const { filters, setCompany, setYear, setQuarter, setMonth } = useFilters();
   const { data: companiesResponse } = useCompanies();
   const { data: periodsResponse } = usePeriods();
 
@@ -93,38 +92,32 @@ export function FilterBar() {
     <div className="flex shrink-0 items-end gap-3">
       <FilterSelect
         label="Company"
-        value={pending.companyId ?? GROUP_COMPANY_ID}
+        value={filters.companyId ?? GROUP_COMPANY_ID}
         options={companyOptions}
         onChange={(v) => setCompany(v === GROUP_COMPANY_ID ? GROUP_COMPANY_ID : v)}
         minWidth={120}
       />
       <FilterSelect
         label="Year"
-        value={String(pending.year)}
+        value={String(filters.year)}
         options={yearOptions}
         minWidth={72}
         onChange={(v) => setYear(Number(v))}
       />
       <FilterSelect
         label="Quarter"
-        value={pending.quarter ? String(pending.quarter) : ""}
+        value={filters.quarter ? String(filters.quarter) : ""}
         options={QUARTERS}
         minWidth={64}
         onChange={(v) => setQuarter(v ? Number(v) : null)}
       />
       <FilterSelect
         label="Month"
-        value={pending.month ? String(pending.month) : ""}
+        value={filters.month ? String(filters.month) : ""}
         options={MONTHS}
         minWidth={64}
         onChange={(v) => setMonth(v ? Number(v) : null)}
       />
-      <button
-        onClick={applyFilters}
-        className="h-9 rounded-lg bg-brand-blue px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-brand-blue/90 active:scale-[0.98] transition-all"
-      >
-        Apply Filters
-      </button>
     </div>
   );
 }
