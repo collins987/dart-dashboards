@@ -125,7 +125,7 @@ export function Header() {
           </label>
 
           {needle && (
-            <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-line bg-white py-1.5 shadow-xl">
+            <div className="absolute right-0 top-full z-50 mt-2 max-h-80 w-72 overflow-y-auto overscroll-contain rounded-xl border border-line bg-white py-1.5 shadow-xl">
               {results.length > 0 ? (
                 results.map((result) =>
                   result.kind === "dashboard" ? (
