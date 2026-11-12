@@ -8,6 +8,7 @@ import {
   YAxis,
   CartesianGrid,
   ReferenceArea,
+  ReferenceLine,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -99,8 +100,12 @@ export function TrendLineChart(props: TrendLineChartProps) {
             Last Year
           </span>
         </div>
+        <div
+          role="img"
+          aria-label={`${key === "revenue" ? "Revenue" : "Expense"} monthly trend for ${year}, this year versus last year, in ${currency} millions.`}
+        >
         <ResponsiveContainer width="100%" height={260}>
-          <ComposedChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+          <ComposedChart accessibilityLayer data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={props.color} stopOpacity={0.28} />
@@ -135,6 +140,7 @@ export function TrendLineChart(props: TrendLineChartProps) {
             />
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
       </div>
     );
   }
@@ -159,8 +165,12 @@ export function TrendLineChart(props: TrendLineChartProps) {
           Net
         </span>
       </div>
+      <div
+        role="img"
+        aria-label={`Monthly revenue, expense and net for ${year}, in ${currency} millions.`}
+      >
       <ResponsiveContainer width="100%" height={260}>
-        <ComposedChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+        <ComposedChart accessibilityLayer data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="trend-fill-revenue-ov" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={COLORS.revenue} stopOpacity={0.26} />
@@ -173,8 +183,17 @@ export function TrendLineChart(props: TrendLineChartProps) {
           </defs>
           <CartesianGrid vertical={false} stroke={COLORS.grid} />
           <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: COLORS.muted }} tickMargin={8} />
-          <YAxis domain={[0, "auto"]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: COLORS.muted }} width={44} label={yAxisLabel(currency)} />
+          {/* Net can be negative, so let the axis open below zero rather than clip the dip. */}
+          <YAxis
+            domain={[(min: number) => Math.min(0, Math.floor(min)), "auto"]}
+            axisLine={false}
+            tickLine={false}
+            tick={{ fontSize: 10, fill: COLORS.muted }}
+            width={44}
+            label={yAxisLabel(currency)}
+          />
           <PeriodHighlight labels={highlighted} />
+          <ReferenceLine y={0} stroke={COLORS.muted} strokeOpacity={0.4} />
           <Tooltip formatter={tooltipFormatter(currency)} contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: COLORS.line }} />
           <Area type="monotone" dataKey="revenue" stroke="none" fill="url(#trend-fill-revenue-ov)" isAnimationActive={false} />
           <Area type="monotone" dataKey="expense" stroke="none" fill="url(#trend-fill-expense-ov)" isAnimationActive={false} />
@@ -183,6 +202,7 @@ export function TrendLineChart(props: TrendLineChartProps) {
           <Line type="monotone" dataKey="net" name="Net" stroke={COLORS.net} strokeWidth={2.5} dot={{ r: 3, fill: "#fff", stroke: COLORS.net, strokeWidth: 2 }} activeDot={{ r: 5 }} connectNulls />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }

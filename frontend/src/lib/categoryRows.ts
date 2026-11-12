@@ -11,6 +11,9 @@ export function toCategoryRows(
   currency: string
 ): CategoryRow[] {
   return items.map((item, index) => ({
+    categoryId: item.categoryId,
+    // OTHERS is a roll-up with no account detail, so it cannot be drilled into.
+    drillable: item.categoryId !== "OTHERS",
     name: item.categoryName,
     dotColor: colors[index % colors.length],
     amount: formatCurrency(item.amount, currency),

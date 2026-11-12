@@ -70,7 +70,22 @@ function FilterSelect({
   );
 }
 
-export function FilterBar() {
+interface CategoryFilter {
+  value: string | null;
+  options: { value: string; label: string }[];
+  onChange: (categoryId: string | null) => void;
+}
+
+interface FilterBarProps {
+  /**
+   * Optional category focus (Revenue/Expenses pages). Category is view state,
+   * not a data filter — the API can't scope summary/trend by category — so it
+   * is passed in rather than kept in the shared filter state.
+   */
+  category?: CategoryFilter;
+}
+
+export function FilterBar({ category }: FilterBarProps = {}) {
   const { filters, setCompany, setYear, setQuarter, setMonth } = useFilters();
   const { data: companiesResponse } = useCompanies();
   const { data: periodsResponse } = usePeriods();
@@ -97,6 +112,15 @@ export function FilterBar() {
         onChange={(v) => setCompany(v === GROUP_COMPANY_ID ? GROUP_COMPANY_ID : v)}
         minWidth={120}
       />
+      {category && (
+        <FilterSelect
+          label="Category"
+          value={category.value ?? ""}
+          options={[{ value: "", label: "All categories" }, ...category.options]}
+          minWidth={150}
+          onChange={(v) => category.onChange(v || null)}
+        />
+      )}
       <FilterSelect
         label="Year"
         value={String(filters.year)}
