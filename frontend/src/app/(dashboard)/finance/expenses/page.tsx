@@ -6,12 +6,13 @@ import { useSummary } from "@/hooks/useSummary";
 import { useTrend } from "@/hooks/useTrend";
 import { useBreakdown } from "@/hooks/useBreakdown";
 import { FilterBar } from "@/components/layout/FilterBar";
+import { FreshnessBadge } from "@/components/layout/FreshnessBadge";
 import { KpiCard } from "@/components/cards/KpiCard";
 import { QuarterCard } from "@/components/cards/QuarterCard";
 import { QueryPanel } from "@/components/states/QueryPanel";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
 import { CategoryBarChart } from "@/components/charts/CategoryBarChart";
-import { CategoryTable } from "@/components/tables/CategoryTable";
+import { CategoryBreakdownTable } from "@/components/tables/CategoryBreakdownTable";
 import { changeTone, changeDirection, changePct } from "@/lib/calculations";
 import { toCategoryRows } from "@/lib/categoryRows";
 import { formatCurrency, formatPercent } from "@/lib/utils";
@@ -36,6 +37,7 @@ export default function ExpensesPage() {
             Expense Analysis
           </h1>
           <p className="mt-0.5 text-[13px] text-muted">Expense performance for {scope.name}</p>
+          <FreshnessBadge dataAsOf={summary.data?.dataAsOf} />
         </div>
         <FilterBar />
       </div>
@@ -134,7 +136,9 @@ export default function ExpensesPage() {
               Share of total, {summary.data?.data.periodLabel ?? "—"}
             </p>
             <QueryPanel query={breakdown} height={260}>
-              {(b) => <CategoryBarChart items={b.data} colors={EXPENSE_CATEGORY_COLORS} />}
+              {(b) => (
+                <CategoryBarChart items={b.data} colors={EXPENSE_CATEGORY_COLORS} />
+              )}
             </QueryPanel>
           </div>
         </div>
@@ -143,8 +147,10 @@ export default function ExpensesPage() {
           <h3 className="mb-4 text-[15px] font-bold text-ink">Expense Categories</h3>
           <QueryPanel query={breakdown} height={200}>
             {(b) => (
-              <CategoryTable
+              <CategoryBreakdownTable
                 rows={toCategoryRows(b.data, EXPENSE_CATEGORY_COLORS, "lower-is-better", b.currency)}
+                filters={filters}
+                currency={b.currency}
               />
             )}
           </QueryPanel>
