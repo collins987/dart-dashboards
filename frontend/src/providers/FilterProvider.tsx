@@ -19,12 +19,10 @@ import { yearToDateLabel } from "@/lib/months";
 
 interface FilterContextValue {
   filters: FilterState;
-  pending: FilterState;
   setCompany: (id: string | null) => void;
   setYear: (year: number) => void;
   setQuarter: (q: number | null) => void;
   setMonth: (m: number | null) => void;
-  applyFilters: () => void;
   showLatestPeriod: () => void;
   latestPeriodLabel: string | null;
 }
@@ -43,7 +41,6 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const [filters, setFilters] = useState<FilterState>(() =>
     filtersFromParams(params, new Date().getFullYear())
   );
-  const [pending, setPending] = useState<FilterState>(filters);
 
   // The URL and query cache only exist in the browser, so the dashboard
   // renders after mount to keep server and client markup identical.
@@ -59,7 +56,6 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     if (yearDefaulted.current || latestYear === null) return;
     yearDefaulted.current = true;
     setFilters((prev) => ({ ...prev, year: latestYear }));
-    setPending((prev) => ({ ...prev, year: latestYear }));
   }, [latestYear]);
 
   // Keep the URL in step with the applied filters so refresh and links keep them.
@@ -69,34 +65,28 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [filters, params, pathname, router]);
 
-  // Company is a scope choice, so it applies immediately to both states.
+  // Every filter applies immediately, so the dashboard updates as the user picks.
   const setCompany = useCallback((id: string | null) => {
     const companyId = id ?? GROUP_COMPANY_ID;
-    setPending((prev) => ({ ...prev, companyId }));
     setFilters((prev) => ({ ...prev, companyId }));
   }, []);
 
   const setYear = useCallback((year: number) => {
-    setPending((prev) => ({ ...prev, year }));
+    setFilters((prev) => ({ ...prev, year }));
   }, []);
 
+  // Quarter and month are mutually exclusive, so picking one clears the other.
   const setQuarter = useCallback((quarter: number | null) => {
-    setPending((prev) => ({ ...prev, quarter, month: null }));
+    setFilters((prev) => ({ ...prev, quarter, month: null }));
   }, []);
 
   const setMonth = useCallback((month: number | null) => {
-    setPending((prev) => ({ ...prev, month, quarter: null }));
+    setFilters((prev) => ({ ...prev, month, quarter: null }));
   }, []);
-
-  const applyFilters = useCallback(() => {
-    setFilters(pending);
-  }, [pending]);
 
   const showLatestPeriod = useCallback(() => {
     if (latestYear === null) return;
-    const next = { year: latestYear, quarter: null, month: null };
-    setPending((prev) => ({ ...prev, ...next }));
-    setFilters((prev) => ({ ...prev, ...next }));
+    setFilters((prev) => ({ ...prev, year: latestYear, quarter: null, month: null }));
   }, [latestYear]);
 
   const latestPeriodLabel =
@@ -107,16 +97,14 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       filters,
-      pending,
       setCompany,
       setYear,
       setQuarter,
       setMonth,
-      applyFilters,
       showLatestPeriod,
       latestPeriodLabel,
     }),
-    [filters, pending, setCompany, setYear, setQuarter, setMonth, applyFilters, showLatestPeriod, latestPeriodLabel]
+    [filters, setCompany, setYear, setQuarter, setMonth, showLatestPeriod, latestPeriodLabel]
   );
 
   if (!mounted) return null;
