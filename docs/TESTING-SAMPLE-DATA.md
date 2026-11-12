@@ -32,7 +32,8 @@ If you switch branches while the dev server is running, stop it (Ctrl+C) and sta
 ## 3. What you should see
 
 - **Year filter**: 2021 to 2026. The default is 2026.
-- **Overview cards**: values change when you change the year. Revenue is roughly 650M (2021), 760M (2022), 840M (2023), 800M (2024), 940M (2025) and 808M (Jan–Nov 2026). Expenses follow their own pattern.
+- **Overview cards**: values change when you change the year. Revenue is roughly 635M (2021), 726M (2022), 800M (2023), 780M (2024), 936M (2025) and 799M (Jan–Nov 2026) — year-on-year growth swings between about -5% and +20%, not a steady line. Expenses follow their own pattern.
+- **Trend chart shape**: the month-to-month curve differs from year to year (one year dips mid-year, another climbs steadily), and the category mix shifts a little each year, so no two years look alike.
 - **Period label**: "Jan–Nov 2026" for the 2026 year. 2025 and earlier show the plain year.
 - **Quarter and month filters**: Q4 2026 shows "Oct–Nov 2026" (December is not closed). December 2026 shows the "No data for this period yet" message with a button to "Show Jan–Nov 2026".
 - **Company filter**: LITES, CPF FS and CPF C&A each show their own figures. The group total is the sum of the three.

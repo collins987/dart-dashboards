@@ -20,6 +20,18 @@ export const SEED = {
    */
   yearFactor: { 2021: 0.86, 2022: 0.97, 2023: 1.04, 2024: 0.95, 2025: 1.08, 2026: 1.0 } as Record<number, number>,
 
+  /**
+   * How much the generated figures wander, so years do not all share one shape.
+   * All variation is deterministic (seeded by company/category/year/month), so
+   * regenerating gives the same numbers every time.
+   *  - growthSpread: each category's year-on-year growth varies by up to this many
+   *    percentage points around its yoyPct, and differently each year.
+   *  - monthSpread: each month is nudged by up to this fraction (0.15 = ±15%), and
+   *    differently each year, so the monthly curve changes shape from year to year.
+   */
+  growthSpread: 7,
+  monthSpread: 0.16,
+
   /** Years with data, ascending. */
   firstYear: 2021,
   lastYear: 2026,

@@ -89,6 +89,47 @@ function categoryDef(categoryId: string) {
 
 // ---- Monthly figures in cents ------------------------------------------------
 
+/**
+ * A deterministic number in [0, 1) from a string seed (a small xmur3 + mulberry32).
+ * Same seed always gives the same value, so regenerating the data is stable.
+ */
+function rand(seed: string): number {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  const t = (h ^= h >>> 16) >>> 0;
+  return t / 4294967296;
+}
+
+/** A deterministic value in [-spread, +spread] from a seed. */
+function jitter(seed: string, spread: number): number {
+  return (rand(seed) * 2 - 1) * spread;
+}
+
+/** This category's year-on-year growth %, wandering around its seed yoyPct by year. */
+function growthPct(companyId: string, categoryId: string, year: number): number {
+  const base = SEED.companyData[companyId][categoryId].yoyPct;
+  return base + jitter(`growth|${companyId}|${categoryId}|${year}`, SEED.growthSpread);
+}
+
+const scaleCache = new Map<string, number>();
+
+/** Compounded scale of a year against the base year, using each year's own growth. */
+function scaleToBase(companyId: string, categoryId: string, year: number): number {
+  if (year >= SEED.lastYear) return 1;
+  const cacheKey = `${companyId}|${categoryId}|${year}`;
+  const cached = scaleCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  // Growth from this year to the next pulls the next year's level back to this one.
+  const step = scaleToBase(companyId, categoryId, year + 1) / (1 + growthPct(companyId, categoryId, year + 1) / 100);
+  scaleCache.set(cacheKey, step);
+  return step;
+}
+
 const monthlyCache = new Map<string, Cents[]>();
 
 /** The 12 monthly amounts (cents) for one company's category in a year. */
@@ -100,16 +141,15 @@ function monthly(companyId: string, categoryId: string, year: number): Cents[] {
   const series = SEED.companyData[companyId]?.[categoryId];
   if (!series) throw new Error(`No seed data for ${companyId} ${categoryId}`);
 
-  let values: Cents[];
-  if (year === SEED.lastYear) {
-    values = series.monthly.map((v) => Math.round(v * CENTS_PER_MILLION));
-  } else {
-    // The next year's figure divided by (1 + growth) gives this year's figure.
-    const yearStep = SEED.yearFactor[year] / SEED.yearFactor[year + 1];
-    values = monthly(companyId, categoryId, year + 1).map((v) =>
-      Math.round((v / (1 + series.yoyPct / 100)) * yearStep)
-    );
-  }
+  const yearFactor = SEED.yearFactor[year] ?? 1;
+  const scale = scaleToBase(companyId, categoryId, year);
+
+  const values = series.monthly.map((v, m) => {
+    // A fresh (not compounded) seasonal nudge, different each year, so the shape moves.
+    const seasonal = 1 + jitter(`month|${companyId}|${categoryId}|${year}|${m}`, SEED.monthSpread);
+    return Math.round(v * CENTS_PER_MILLION * yearFactor * scale * seasonal);
+  });
+
   monthlyCache.set(cacheKey, values);
   return values;
 }
